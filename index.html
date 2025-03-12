@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>翻ヤギ AI - MarianMT版</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+  <style>
+    :root {
+      --primary-color: #5d5cde;
+      --focus-color: #4b4ab2;
+      --light-bg: #ffffff;
+      --dark-bg: #181818;
+      --light-text: #333333;
+      --dark-text: #f0f0f0;
+      --light-card: #f5f5f5;
+      --dark-card: #252525;
+      --light-input: #ffffff;
+      --dark-input: #2a2a2a;
+      --light-border: #e0e0e0;
+      --dark-border: #3a3a3a;
+    }
+    @media (prefers-color-scheme: dark) {
+      .bg-theme {
+        background-color: var(--dark-bg);
+        color: var(--dark-text);
+      }
+      .card-theme {
+        background-color: var(--dark-card);
+        border-color: var(--dark-border);
+      }
+      .input-theme {
+        background-color: var(--dark-input);
+        color: var(--dark-text);
+        border-color: var(--dark-border);
+      }
+      select.input-theme option {
+        background-color: var(--dark-input);
+        color: var(--dark-text);
+      }
+    }
+    @media (prefers-color-scheme: light) {
+      .bg-theme {
+        background-color: var(--light-bg);
+        color: var(--light-text);
+      }
+      .card-theme {
+        background-color: var(--light-card);
+        border-color: var(--light-border);
+      }
+      .input-theme {
+        background-color: var(--light-input);
+        color: var(--light-text);
+        border-color: var(--light-border);
+      }
+      select.input-theme option {
+        background-color: var(--light-input);
+        color: var(--light-text);
+      }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .pulse {
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    
+  </style>
+  <!-- manifest.jsonを読み込む -->
+<link rel="manifest" href="/manifest.json">
+
+</head>
+<body class="bg-theme min-h-screen font-sans">
+  <div class="container mx-auto px-4 py-8 max-w-4xl">
+    <h1 class="text-2xl md:text-3xl font-bold text-center mb-8">
+      <span class="text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-indigo-600">翻ヤギ AI</span>
+    </h1>
+    
+    <div class="card-theme rounded-lg shadow-lg p-6 mb-8">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <label for="sourceLanguage" class="block mb-2 font-medium">元の言語</label>
+          <!-- 自動検出は非対応：必ず選択 -->
+          <select id="sourceLanguage" class="input-theme w-full rounded-md p-2 border text-base">
+            <option value="ja">日本語</option>
+            <option value="en">英語</option>
+            <option value="ko">韓国語</option>
+            <option value="fr">フランス語</option>
+            <option value="de">ドイツ語</option>
+            <option value="es">スペイン語</option>
+            <option value="it">イタリア語</option>
+            <option value="ru">ロシア語</option>
+          </select>
+        </div>
+        <div>
+          <label for="targetLanguage" class="block mb-2 font-medium">翻訳先の言語</label>
+          <select id="targetLanguage" class="input-theme w-full rounded-md p-2 border text-base">
+            <option value="en" selected>英語</option>
+            <option value="fr">フランス語</option>
+            <option value="es">スペイン語</option>
+            <option value="ru">ロシア語</option>
+          </select>
+        </div>
+      </div>
+      
+      <!-- モデル選択（UI上のみ） -->
+      <div class="mb-4">
+        <label for="aiModel" class="block mb-2 font-medium">AIモデルを選択</label>
+        <div class="flex flex-wrap gap-4">
+          <label class="flex items-center cursor-pointer">
+            <input type="radio" name="aiModel" value="MarianMT" class="hidden" checked>
+            <div class="model-selector px-4 py-2 rounded-md border border-gray-300 transition-colors duration-200" data-model="MarianMT">
+              <span class="font-medium">MarianMT</span>
+            </div>
+          </label>
+        </div>
+      </div>
+      
+      <div class="mb-4">
+        <label for="sourceText" class="block mb-2 font-medium">翻訳するテキスト</label>
+        <textarea id="sourceText" rows="5" class="input-theme w-full rounded-md p-3 border resize-y text-base" placeholder="ここに翻訳したいテキストを入力してください"></textarea>
+      </div>
+      
+      <div class="flex justify-end">
+        <button id="translateBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-6 rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+          翻訳する
+        </button>
+      </div>
+    </div>
+    
+    <div id="resultCard" class="card-theme rounded-lg shadow-lg p-6 hidden">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold">翻訳結果</h2>
+        <div id="resultModelInfo" class="text-sm rounded-full px-3 py-1 bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200"></div>
+      </div>
+      <div id="loadingIndicator" class="py-4 text-center hidden">
+        <div class="inline-flex items-center px-4 py-2 font-semibold leading-6 text-sm rounded-md text-white bg-indigo-600 transition ease-in-out duration-150 cursor-not-allowed">
+          <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          翻訳処理中...
+        </div>
+      </div>
+      <div id="translationResult" class="input-theme rounded-md p-4 border min-h-[100px] whitespace-pre-wrap"></div>
+    </div>
+    
+    <div id="errorMessage" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md mt-4 hidden dark:bg-red-900 dark:text-red-200 dark:border-red-800">
+      <strong class="font-bold">エラー: </strong>
+      <span id="errorText"></span>
+    </div>
+    
+    <div class="text-center text-sm text-gray-500 mt-8 dark:text-gray-400">
+      © 2025 合同会社ヤギ
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const sourceLanguageSelect = document.getElementById('sourceLanguage');
+      const targetLanguageSelect = document.getElementById('targetLanguage');
+      const sourceTextArea = document.getElementById('sourceText');
+      const translateBtn = document.getElementById('translateBtn');
+      const modelSelectors = document.querySelectorAll('.model-selector');
+      const resultCard = document.getElementById('resultCard');
+      const resultModelInfo = document.getElementById('resultModelInfo');
+      const translationResult = document.getElementById('translationResult');
+      const loadingIndicator = document.getElementById('loadingIndicator');
+      const errorMessage = document.getElementById('errorMessage');
+      const errorText = document.getElementById('errorText');
+
+      // モデル選択のUI調整（見た目のみ）
+      function updateModelSelectors() {
+        modelSelectors.forEach(selector => {
+          const input = selector.parentElement.querySelector('input');
+          const isSelected = input.checked;
+          const darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (isSelected) {
+            selector.classList.add('bg-indigo-100', 'border-indigo-500');
+            if (darkMode) {
+              selector.classList.add('bg-indigo-900', 'border-indigo-700');
+            }
+          } else {
+            selector.classList.remove('bg-indigo-100', 'border-indigo-500', 'bg-indigo-900', 'border-indigo-700');
+          }
+        });
+      }
+      modelSelectors.forEach(selector => {
+        selector.addEventListener('click', () => {
+          const input = selector.parentElement.querySelector('input');
+          input.checked = true;
+          updateModelSelectors();
+        });
+      });
+      updateModelSelectors();
+
+      function showError(message) {
+        errorText.textContent = message;
+        errorMessage.classList.remove('hidden');
+        loadingIndicator.classList.add('hidden');
+        setTimeout(() => {
+          errorMessage.classList.add('hidden');
+        }, 5000);
+      }
+
+      translateBtn.addEventListener('click', async () => {
+        const sourceText = sourceTextArea.value.trim();
+        if (!sourceText) {
+          showError("翻訳するテキストを入力してください。");
+          return;
+        }
+        const sourceLanguage = sourceLanguageSelect.value;  // 自動検出はサポートしていません
+        const targetLanguage = targetLanguageSelect.value;
+        if (sourceLanguage === targetLanguage) {
+          showError("元の言語と翻訳先の言語が同じです。異なる言語を選択してください。");
+          return;
+        }
+
+        // UI上に選択情報を表示
+        const languageNames = {
+          "ja": "日本語",
+          "en": "英語",
+          "zh": "中国語",
+          "ko": "韓国語",
+          "fr": "フランス語",
+          "de": "ドイツ語",
+          "es": "スペイン語",
+          "it": "イタリア語",
+          "ru": "ロシア語"
+        };
+        const fromLangName = languageNames[sourceLanguage];
+        const toLangName = languageNames[targetLanguage];
+        const selectedModel = document.querySelector('input[name="aiModel"]:checked').value;
+        resultModelInfo.textContent = `${fromLangName} → ${toLangName} (${selectedModel})`;
+
+        resultCard.classList.remove('hidden');
+        translationResult.textContent = "";
+        loadingIndicator.classList.remove('hidden');
+
+        try {
+          // Hugging Face Inference API 経由でMarianMTモデルへリクエスト
+          // 対応モデルは "Helsinki-NLP/opus-mt-{src}-{tgt}" の形式となります。
+          const modelEndpoint = `https://api-inference.huggingface.co/models/Helsinki-NLP/opus-mt-${sourceLanguage}-${targetLanguage}`;
+          const response = await fetch("/api/translate", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({ sourceText, sourceLanguage, targetLanguage })
+});
+
+
+          const result = await response.json();
+          if (result.error) {
+            throw new Error(result.error);
+          }
+          if (Array.isArray(result) && result[0].translation_text) {
+            translationResult.textContent = result[0].translation_text;
+          } else {
+            throw new Error("翻訳結果が取得できませんでした。");
+          }
+        } catch (err) {
+          showError(`リクエスト中にエラーが発生しました: ${err.message || err}`);
+        } finally {
+          loadingIndicator.classList.add('hidden');
+        }
+      });
+    });
+    if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/service-worker.js')
+        .then(registration => {
+          console.log('Service Worker registered with scope:', registration.scope);
+        })
+        .catch(error => {
+          console.error('Service Worker registration failed:', error);
+        });
+    });
+  }
+  </script>
+</body>
+</html>
